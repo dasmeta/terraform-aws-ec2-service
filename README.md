@@ -222,6 +222,3 @@ real AMI compatibility, IAM permissions, subnet placement, application health,
 network routes and TLS certificates in your deployment environment. Upstream
 EC2 also reads public AMI SSM metadata and the supplied subnet during real plans,
 even when the AMI/VPC are explicit.
-
-Design and implementation evidence: [specification](specs/001-ec2-alb-service/spec.md),
-[plan](specs/001-ec2-alb-service/plan.md), [tasks](specs/001-ec2-alb-service/tasks.md).
