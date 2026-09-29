@@ -1,7 +1,7 @@
 locals {
   target_groups = {
     for key, group in var.target_groups : key => merge(group, {
-      targets = merge(group.targets, group.attach_created_instance && var.ec2 != null ? {
+      targets = merge(group.targets, group.attach_created_instance && length(module.ec2) > 0 ? {
         __created_instance = {
           instance_id = module.ec2[0].instance_id
           port        = coalesce(group.created_instance_port, group.port)
@@ -21,7 +21,9 @@ locals {
   alb_source_security_groups = var.alb == null ? {} : (var.alb.security_group.create ? {
     managed = module.alb[0].security_group_id
     } : {
-    for index, id in var.alb.security_group.ids : "existing-${index}" => id
+    # IDs are stable identities; positions would swap rule sources on reordering.
+    # Existing IDs must be known at plan time when generating backend rules.
+    for id in toset(var.alb.security_group.ids) : id => id
   })
 
   alb_ingress_rules = try(var.ec2.security_group.create, false) && var.alb != null ? merge({}, [

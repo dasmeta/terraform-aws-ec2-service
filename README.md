@@ -195,6 +195,65 @@ Migrating from direct upstream modules changes Terraform resource addresses and
 may require state moves/imports to avoid recreation. Review the real plan before
 applying; local mock tests do not migrate an existing deployment.
 
+## Values required during planning
+
+Terraform must know resource keys before apply. The following values form keys
+for generated ingress rules and must be known and non-sensitive during plan:
+
+- `alb.security_group.allowed_cidr_blocks` values when creating ALB listener
+  ingress (also `config.security_group.allowed_cidr_blocks` in the ALB submodule).
+- Effective target ports (`target_groups.*.created_instance_port` or `port`) and
+  health-check ports for groups with `attach_created_instance = true`, when the
+  root creates the EC2 security group and automatic connection rules.
+- Existing `alb.security_group.ids` when `create = false` and the root creates
+  automatic connection rules or `backend_ingress_rules`. Rule identities use SG
+  IDs, so list reordering and insertion do not repurpose existing rules.
+
+Map keys and creation flags must also be known during plan. IDs of the root-created
+EC2 and ALB security group may remain unknown until apply; they occur only in
+resource values. `ec2.user_data` may be sensitive and remains sensitive in the
+EC2 resource; it does not determine attachment keys.
+
+For CIDRs from IPAM or ports known only after apply, supply externally managed
+security groups: set `alb.security_group.create = false` with `ids` and omit
+`allowed_cidr_blocks`. For computed backend ports, also set
+`ec2.security_group.create = false` with its `ids` to disable automatic EC2
+connection rules. Manage ingress through external resources with fixed names or
+caller-defined map keys; put the computed CIDRs/ports in their values. Permit
+listener traffic on the ALB group and application/health-check traffic from the
+ALB group on the EC2 group, with appropriate outbound rules. The ALB, listeners,
+target groups and instance registration can still be managed by this module.
+See the [tested computed-input configuration](tests/fixtures/computed-network/main.tf).
+
+## Upgrading existing ALB source rule addresses
+
+Earlier versions keyed existing ALB source groups as `existing-0`, `existing-1`,
+etc. The root now keys them by SG ID. Generated ALB groups keep the `managed` key.
+If existing groups already have root-managed backend ingress in state, migrate
+those rule addresses before applying this update. No migration is needed for
+fresh deployments or for rules sourced only from a module-created ALB group.
+
+Use the **old state's** `referenced_security_group_id` to map each positional key
+to its SG ID, regardless of the current list order. Move every affected automatic
+rule (each port) and explicit backend rule (each logical rule key). For example,
+with the root called `module.service`, old source `existing-0` referring to
+`sg-01111111111111111`, port 8000 and explicit rule key `app`:
+
+```sh
+terraform state mv \
+  'module.service.aws_vpc_security_group_ingress_rule.alb["[\"8000\",\"existing-0\"]"]' \
+  'module.service.aws_vpc_security_group_ingress_rule.alb["[\"8000\",\"sg-01111111111111111\"]"]'
+terraform state mv \
+  'module.service.aws_vpc_security_group_ingress_rule.backend["[\"app\",\"existing-0\"]"]' \
+  'module.service.aws_vpc_security_group_ingress_rule.backend["[\"app\",\"sg-01111111111111111\"]"]'
+```
+
+Adapt the module path and only move addresses actually present in your state.
+Review the subsequent plan: a keys-only migration should not recreate or update
+these rules. Applying without moving existing addresses can attempt to create
+duplicate rules or temporarily remove access. This repository does not execute
+state migrations automatically.
+
 ## Outputs
 
 `instance_id`, `instance_arn`, `instance_private_ip`, `instance_public_ip`,

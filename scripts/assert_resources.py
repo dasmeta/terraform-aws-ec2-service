@@ -117,3 +117,34 @@ assert alb["internal"] is False and alb["enable_deletion_protection"] is False
 assert alb["idle_timeout"] == 300
 
 print("Nested ALB resources, lifecycle isolation, restricted backend access, unknown-ID planning and root wiring checks passed.")
+
+sensitive_plan = root_plans["sensitive_bootstrap"]
+sensitive_instance = of_type(sensitive_plan, "aws_instance")[0]["change"]
+assert sensitive_instance["after_sensitive"].get("user_data") is True
+assert len(of_type(sensitive_plan, "aws_lb_target_group_attachment")) == 1
+
+for run_name in ("source_identity_unchanged", "source_identity_reordered"):
+    rules = of_type(root_plans[run_name], "aws_vpc_security_group_ingress_rule")
+    assert len(rules) == 4
+    assert all(r["change"]["actions"] == ["no-op"] for r in rules), run_name
+inserted_rules = of_type(root_plans["source_identity_inserted"], "aws_vpc_security_group_ingress_rule")
+assert len(inserted_rules) == 6
+assert sum(r["change"]["actions"] == ["no-op"] for r in inserted_rules) == 4
+assert sum(r["change"]["actions"] == ["create"] for r in inserted_rules) == 2
+print("Sensitive bootstrap and stable ALB source identity regressions passed.")
+
+computed = root_plans["computed_network_external_groups"]
+assert not of_type(computed, "aws_security_group")
+computed_rules = of_type(computed, "aws_vpc_security_group_ingress_rule")
+assert {r["address"] for r in computed_rules} == {
+    "aws_vpc_security_group_ingress_rule.client[0]",
+    "aws_vpc_security_group_ingress_rule.backend[0]",
+}
+client = next(r for r in computed_rules if ".client[" in r["address"])
+backend = next(r for r in computed_rules if ".backend[" in r["address"])
+assert client["change"]["after_unknown"]["cidr_ipv4"] is True
+assert backend["change"]["after_unknown"]["from_port"] is True
+assert backend["change"]["after_unknown"]["to_port"] is True
+computed_attachment, = of_type(computed, "aws_lb_target_group_attachment")
+assert computed_attachment["change"]["after_unknown"]["port"] is True
+print("Computed CIDR/port planning with externally managed security groups passed.")

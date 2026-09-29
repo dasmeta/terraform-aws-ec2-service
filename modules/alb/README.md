@@ -145,3 +145,12 @@ a generated group), `security_group_ids`, `listener_arns`, and `target_group_arn
 Run the repository's [validation script](../../scripts/validate.sh) for provider
 schema checks and AWS mock tests. Real deployments require existing networking,
 compatible instance targets, reachable application ports and valid certificates.
+
+## Plan-time CIDRs
+
+`config.security_group.allowed_cidr_blocks` values form listener ingress resource
+keys, so they must be known and non-sensitive during plan. For a CIDR allocated
+only at apply (for example through IPAM), set `security_group.create = false`,
+supply `security_group.ids`, omit `allowed_cidr_blocks`, and manage the group's
+rules externally using fixed resource names or caller-defined keys. Keep computed
+CIDRs in rule values. See the root [planning constraints](../../README.md#values-required-during-planning).
