@@ -1,0 +1,31 @@
+name: Tflint
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  tflint:
+    permissions:
+      actions: write
+      contents: write
+      discussions: write
+      pull-requests: write
+      id-token: write
+      security-events: write
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        path:
+          - ./
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: terraform-linters/setup-tflint@v6
+      - name: Run TFLint
+        run: >-
+          tflint
+          --chdir="${{ matrix.path }}"
+          --enable-rule=terraform_unused_declarations
+          --minimum-failure-severity=error
+          --format=compact
