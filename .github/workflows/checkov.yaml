@@ -19,7 +19,7 @@ jobs:
           - ./
 
     steps:
-    - uses: dasmeta/reusable-actions-workflows/checkov@4.3.2
+    - uses: dasmeta/reusable-actions-workflows/checkov@4.4.0
       with:
         fetch-depth: 0
         directory: ${{ matrix.path }}
