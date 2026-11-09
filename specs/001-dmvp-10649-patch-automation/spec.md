@@ -1,6 +1,6 @@
 # Feature Specification: EC2 patching and EKS AMI updates
 
-**Feature Branch**: `001-dmvp-10649-patch-automation`
+**Feature Branch**: `DMVP-10649-patch-automation`
 **Created**: 2026-11-09
 **Status**: Draft
 **Input**: DMVP-10649 and operator clarification: implement ordinary EC2 patching and EKS worker AMI replacement as separate modules in terraform-aws-ec2-service.

@@ -1,6 +1,6 @@
 # Implementation Plan: EC2 patching and EKS AMI updates
 
-**Branch**: `001-dmvp-10649-patch-automation` | **Date**: 2026-11-09 | **Spec**: [spec.md](spec.md)
+**Branch**: `DMVP-10649-patch-automation` | **Date**: 2026-11-09 | **Spec**: [spec.md](spec.md)
 
 ## Technical Context
 
