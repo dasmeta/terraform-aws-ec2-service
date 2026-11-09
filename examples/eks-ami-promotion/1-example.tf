@@ -8,11 +8,13 @@ variable "approved_release_version" {
 }
 variable "promotion" {
   type = object({
-    cluster_name        = string
-    node_group_name     = string
-    automation_role_arn = string
-    notification_arn    = string
-    approvers           = list(string)
+    cluster_name               = string
+    node_group_name            = string
+    automation_role_arn        = string
+    notification_arn           = string
+    approvers                  = list(string)
+    max_unavailable            = optional(number)
+    max_unavailable_percentage = optional(number)
   })
   description = "Existing node group and named production approval configuration."
 }

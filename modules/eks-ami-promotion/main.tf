@@ -8,7 +8,9 @@ data "aws_eks_node_group" "current" {
 }
 
 locals {
-  candidate = jsondecode(data.aws_ssm_parameter.candidate.value)
+  candidate            = jsondecode(data.aws_ssm_parameter.candidate.value)
+  use_percentage_limit = var.promotion.max_unavailable_percentage != null
+  rollout_limit        = local.use_percentage_limit ? var.promotion.max_unavailable_percentage : coalesce(var.promotion.max_unavailable, 1)
 }
 
 # This module intentionally does not change the node group during Terraform apply.
@@ -46,8 +48,8 @@ resource "aws_ssm_document" "promote" {
           Api              = "DescribeNodegroup"
           clusterName      = var.promotion.cluster_name
           nodegroupName    = var.promotion.node_group_name
-          PropertySelector = "$.nodegroup.updateConfig.maxUnavailable"
-          DesiredValues    = [tostring(var.promotion.max_unavailable)]
+          PropertySelector = local.use_percentage_limit ? "$.nodegroup.updateConfig.maxUnavailablePercentage" : "$.nodegroup.updateConfig.maxUnavailable"
+          DesiredValues    = [tostring(local.rollout_limit)]
         }
       },
       {

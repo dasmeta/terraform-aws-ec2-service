@@ -19,19 +19,26 @@ variable "candidate" {
 
 variable "promotion" {
   type = object({
-    cluster_name        = string                 # Existing EKS cluster name.
-    node_group_name     = string                 # Existing managed node group name.
-    automation_role_arn = string                 # Role allowed to describe and update this node group.
-    notification_arn    = string                 # SNS topic for manual approval requests.
-    approvers           = list(string)           # Named IAM approver ARNs.
-    approval_timeout    = optional(number, 3600) # Seconds before an unanswered request aborts.
-    max_unavailable     = optional(number, 1)    # Desired node rollout interruption limit; document and set on node group separately.
+    cluster_name               = string                 # Existing EKS cluster name.
+    node_group_name            = string                 # Existing managed node group name.
+    automation_role_arn        = string                 # Role allowed to describe and update this node group.
+    notification_arn           = string                 # SNS topic for manual approval requests.
+    approvers                  = list(string)           # Named IAM approver ARNs.
+    approval_timeout           = optional(number, 3600) # Seconds before an unanswered request aborts.
+    max_unavailable            = optional(number)       # Existing absolute node rollout limit, if configured.
+    max_unavailable_percentage = optional(number)       # Existing percentage node rollout limit, if configured.
   })
   description = "Existing managed node group and approval settings; this module never starts a promotion automatically."
   nullable    = false
   validation {
-    condition     = length(var.promotion.approvers) > 0 && var.promotion.approval_timeout > 0 && var.promotion.max_unavailable > 0
-    error_message = "Promotion requires named approvers, a positive timeout, and a positive rollout limit."
+    condition = (
+      length(var.promotion.approvers) > 0 &&
+      var.promotion.approval_timeout > 0 &&
+      !(var.promotion.max_unavailable != null && var.promotion.max_unavailable_percentage != null) &&
+      (var.promotion.max_unavailable == null || var.promotion.max_unavailable > 0) &&
+      (var.promotion.max_unavailable_percentage == null || (var.promotion.max_unavailable_percentage > 0 && var.promotion.max_unavailable_percentage <= 100))
+    )
+    error_message = "Promotion requires named approvers, a positive timeout, and one valid rollout limit (absolute or percentage)."
   }
 }
 

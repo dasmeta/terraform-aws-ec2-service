@@ -56,3 +56,25 @@ run "reject_unvalidated_release" {
   }
   expect_failures = [aws_ssm_document.promote]
 }
+
+run "accept_percentage_rollout_limit" {
+  command = plan
+  variables {
+    promotion = {
+      cluster_name               = "example"
+      node_group_name            = "workers"
+      automation_role_arn        = "arn:aws:iam::123456789012:role/eks-promotion"
+      notification_arn           = "arn:aws:sns:us-east-1:123456789012:AutomationApproval"
+      approvers                  = ["arn:aws:iam::123456789012:role/EksApprover"]
+      max_unavailable_percentage = 33
+    }
+  }
+  assert {
+    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[1].inputs.PropertySelector == "$.nodegroup.updateConfig.maxUnavailablePercentage"
+    error_message = "The guard must check the existing percentage rollout limit."
+  }
+  assert {
+    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[1].inputs.DesiredValues == ["33"]
+    error_message = "The guard must check the exact percentage configured on the node group."
+  }
+}
