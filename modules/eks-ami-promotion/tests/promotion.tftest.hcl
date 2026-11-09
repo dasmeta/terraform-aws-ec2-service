@@ -78,3 +78,18 @@ run "accept_percentage_rollout_limit" {
     error_message = "The guard must check the exact percentage configured on the node group."
   }
 }
+
+run "reject_zero_percentage_rollout_limit" {
+  command = plan
+  variables {
+    promotion = {
+      cluster_name               = "example"
+      node_group_name            = "workers"
+      automation_role_arn        = "arn:aws:iam::123456789012:role/eks-promotion"
+      notification_arn           = "arn:aws:sns:us-east-1:123456789012:AutomationApproval"
+      approvers                  = ["arn:aws:iam::123456789012:role/EksApprover"]
+      max_unavailable_percentage = 0
+    }
+  }
+  expect_failures = [var.promotion]
+}

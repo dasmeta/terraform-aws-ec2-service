@@ -35,8 +35,8 @@ variable "promotion" {
       length(var.promotion.approvers) > 0 &&
       var.promotion.approval_timeout > 0 &&
       !(var.promotion.max_unavailable != null && var.promotion.max_unavailable_percentage != null) &&
-      (var.promotion.max_unavailable == null || var.promotion.max_unavailable > 0) &&
-      (var.promotion.max_unavailable_percentage == null || (var.promotion.max_unavailable_percentage > 0 && var.promotion.max_unavailable_percentage <= 100))
+      (var.promotion.max_unavailable == null ? true : var.promotion.max_unavailable > 0) &&
+      (var.promotion.max_unavailable_percentage == null ? true : (var.promotion.max_unavailable_percentage > 0 && var.promotion.max_unavailable_percentage <= 100))
     )
     error_message = "Promotion requires named approvers, a positive timeout, and one valid rollout limit (absolute or percentage)."
   }
