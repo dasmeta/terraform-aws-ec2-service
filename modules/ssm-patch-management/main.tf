@@ -19,15 +19,26 @@ locals {
       max_concurrency   = var.production.max_concurrency
       max_errors        = var.production.max_errors
   } })
+  nonproduction_operations = var.nonproduction.scan_only ? { scan = "Scan" } : { scan = "Scan", install = "Install" }
   windows = merge({
-    scan    = merge(local.environments.nonproduction, { schedule = var.nonproduction.scan_schedule })
+    scan = merge(local.environments.nonproduction, { schedule = var.nonproduction.scan_schedule })
+    }, var.nonproduction.scan_only ? {} : {
     install = merge(local.environments.nonproduction, { schedule = var.nonproduction.install_schedule })
     }, var.production == null ? {} : {
     production = merge(local.environments.production, { schedule = var.production.install_schedule })
   })
+  nonproduction_target_tags = {
+    for target in flatten([
+      for instance_id in var.nonproduction.target_instance_ids : [
+        { instance_id = instance_id, key = "Environment", value = var.nonproduction.environment },
+        { instance_id = instance_id, key = "PatchGroup", value = var.nonproduction.patch_group }
+      ]
+    ]) : "${target.instance_id}:${target.key}" => target
+  }
 }
 
 resource "aws_ssm_patch_baseline" "this" {
+  count            = var.patch_policy == null ? 0 : 1
   name             = "${var.name}-baseline"
   operating_system = var.patch_policy.operating_system
   rejected_patches = var.patch_policy.rejected_patches
@@ -49,9 +60,16 @@ resource "aws_ssm_patch_baseline" "this" {
 }
 
 resource "aws_ssm_patch_group" "this" {
-  for_each    = local.environments
-  baseline_id = aws_ssm_patch_baseline.this.id
+  for_each    = var.patch_policy == null ? {} : local.environments
+  baseline_id = aws_ssm_patch_baseline.this[0].id
   patch_group = each.value.patch_group
+}
+
+resource "aws_ec2_tag" "nonproduction_targets" {
+  for_each    = local.nonproduction_target_tags
+  resource_id = each.value.instance_id
+  key         = each.value.key
+  value       = each.value.value
 }
 
 resource "aws_resourcegroups_group" "targets" {
@@ -88,10 +106,11 @@ resource "aws_ssm_maintenance_window_target" "this" {
     key    = "resource-groups:Name"
     values = [aws_resourcegroups_group.targets[each.key == "production" ? "production" : "nonproduction"].name]
   }
+  depends_on = [aws_ec2_tag.nonproduction_targets]
 }
 
 resource "aws_ssm_maintenance_window_task" "nonproduction" {
-  for_each         = { scan = "Scan", install = "Install" }
+  for_each         = local.nonproduction_operations
   window_id        = aws_ssm_maintenance_window.this[each.key].id
   task_type        = "RUN_COMMAND"
   task_arn         = "AWS-RunPatchBaseline"

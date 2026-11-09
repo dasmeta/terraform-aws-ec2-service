@@ -16,32 +16,42 @@ variable "patch_policy" {
     approve_after_days = optional(number, 7)        # Days after release before automatic approval.
     rejected_patches   = optional(list(string), []) # Explicitly rejected patch IDs.
   })
-  description = "OS patch baseline policy."
-  nullable    = false
+  description = "OS patch baseline policy. Null uses AWS default baselines and creates no patch-group association."
+  default     = null
   validation {
-    condition     = length(var.patch_policy.classifications) > 0 && var.patch_policy.approve_after_days >= 0
+    condition     = var.patch_policy == null ? true : length(var.patch_policy.classifications) > 0 && var.patch_policy.approve_after_days >= 0
     error_message = "Provide classifications and a nonnegative approval delay."
   }
 }
 
 variable "nonproduction" {
   type = object({
-    environment       = string                # Value of the Environment tag on nonproduction instances.
-    patch_group       = string                # Value of the PatchGroup tag on nonproduction instances.
-    scan_schedule     = string                # Maintenance Window cron/rate expression for compliance scans.
-    install_schedule  = string                # Maintenance Window cron/rate expression for patch installation.
-    schedule_timezone = string                # IANA time zone for both schedules.
-    duration          = optional(number, 3)   # Window length in hours.
-    cutoff            = optional(number, 1)   # Hours before end when new tasks stop.
-    max_concurrency   = optional(string, "1") # Concurrent nodes per task.
-    max_errors        = optional(string, "0") # Failed nodes allowed per task.
-    service_role_arn  = string                # Maintenance Window service role ARN.
+    environment         = string                     # Value of the Environment tag on nonproduction instances.
+    patch_group         = string                     # Value of the PatchGroup tag on nonproduction instances.
+    scan_schedule       = string                     # Maintenance Window cron/rate expression for compliance scans.
+    install_schedule    = optional(string)           # Maintenance Window cron/rate expression for patch installation; omit for scan-only.
+    scan_only           = optional(bool, false)      # Create only a scan window and never schedule an Install task.
+    target_instance_ids = optional(list(string), []) # EC2 instances to tag with Environment and PatchGroup for this target group.
+    schedule_timezone   = string                     # IANA time zone for both schedules.
+    duration            = optional(number, 3)        # Window length in hours.
+    cutoff              = optional(number, 1)        # Hours before end when new tasks stop.
+    max_concurrency     = optional(string, "1")      # Concurrent nodes per task.
+    max_errors          = optional(string, "0")      # Failed nodes allowed per task.
+    service_role_arn    = string                     # Maintenance Window service role ARN.
   })
   description = "Nonproduction target and schedule."
   nullable    = false
   validation {
     condition     = var.nonproduction.duration > var.nonproduction.cutoff && var.nonproduction.duration <= 24 && var.nonproduction.cutoff >= 0
     error_message = "duration must exceed nonnegative cutoff."
+  }
+  validation {
+    condition     = var.nonproduction.scan_only ? true : var.nonproduction.install_schedule != null ? length(trimspace(var.nonproduction.install_schedule)) > 0 : false
+    error_message = "install_schedule is required unless scan_only is true."
+  }
+  validation {
+    condition     = length(var.nonproduction.target_instance_ids) == length(distinct(var.nonproduction.target_instance_ids))
+    error_message = "target_instance_ids must not contain duplicates."
   }
 }
 

@@ -1,10 +1,10 @@
 output "patch_baseline_id" {
-  description = "Patch baseline identifier."
-  value       = aws_ssm_patch_baseline.this.id
+  description = "Created patch baseline identifier, or null when AWS defaults are used."
+  value       = try(aws_ssm_patch_baseline.this[0].id, null)
 }
 
 output "maintenance_window_ids" {
-  description = "Scan, nonproduction install, and optional production window IDs."
+  description = "Created scan, optional nonproduction install, and optional production window IDs."
   value       = { for key, window in aws_ssm_maintenance_window.this : key => window.id }
 }
 

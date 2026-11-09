@@ -60,3 +60,32 @@ run "production_disabled_by_default" {
     error_message = "No production task may exist without explicit configuration."
   }
 }
+
+run "scan_only_uses_default_baselines_and_exact_instances" {
+  command = plan
+  variables {
+    patch_policy = null
+    production   = null
+    nonproduction = {
+      environment         = "dev"
+      patch_group         = "sela-dev-ec2-test"
+      scan_schedule       = "cron(0 1 ? * SUN *)"
+      scan_only           = true
+      target_instance_ids = ["i-04cb67458bffa5472", "i-024dc0b7d614d44a4"]
+      schedule_timezone   = "UTC"
+      service_role_arn    = "arn:aws:iam::123456789012:role/ssm-window"
+    }
+  }
+  assert {
+    condition     = length(aws_ssm_patch_baseline.this) == 0 && length(aws_ssm_patch_group.this) == 0
+    error_message = "Scan-only testing must use AWS default OS baselines."
+  }
+  assert {
+    condition     = length(aws_ssm_maintenance_window.this) == 1 && length(aws_ssm_maintenance_window_task.nonproduction) == 1 && alltrue([for p in aws_ssm_maintenance_window_task.nonproduction["scan"].task_invocation_parameters[0].run_command_parameters[0].parameter : p.values[0] == "Scan"])
+    error_message = "Scan-only testing must create one Scan window and no Install task."
+  }
+  assert {
+    condition     = length(aws_ec2_tag.nonproduction_targets) == 4
+    error_message = "Both explicit instances must receive Environment and PatchGroup tags."
+  }
+}

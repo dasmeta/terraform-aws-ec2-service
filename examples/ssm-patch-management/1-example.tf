@@ -22,3 +22,7 @@ module "patching" {
   }
   # Add production only after the window, roles, SNS topic, and approvers are approved.
 }
+
+# For a mixed-OS compliance test, set patch_policy = null to use AWS default
+# baselines, set nonproduction.scan_only = true, list target_instance_ids,
+# and omit nonproduction.install_schedule. No Install task is created.
