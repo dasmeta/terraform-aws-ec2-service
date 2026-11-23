@@ -18,6 +18,8 @@ jobs:
       matrix:
         path:
           - ./
+          - modules/ssm-patch-management
+          - modules/eks-ami-promotion
 
     steps:
       - uses: actions/checkout@v7
