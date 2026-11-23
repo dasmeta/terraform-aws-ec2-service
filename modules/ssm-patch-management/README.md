@@ -18,14 +18,14 @@ Initialize with `terraform init -backend=false`; then run `terraform validate` a
 ## Requirements
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.9 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.37 |
 
 ## Providers
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 6.37 |
 
 ## Modules
@@ -35,7 +35,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-| ---- | ---- |
+|------|------|
 | [aws_cloudwatch_event_rule.execution_status](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_rule.nonproduction_status](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_target.execution_status](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
@@ -53,7 +53,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ---- | ----------- | ---- | ------- | :------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_name"></a> [name](#input\_name) | Prefix for patch-management resources. | `string` | n/a | yes |
 | <a name="input_nonproduction"></a> [nonproduction](#input\_nonproduction) | Nonproduction target and schedule. | <pre>object({<br/>    environment         = string                     # Value of the Environment tag on nonproduction instances.<br/>    patch_group         = string                     # Value of the PatchGroup tag on nonproduction instances.<br/>    scan_schedule       = string                     # Maintenance Window cron/rate expression for compliance scans.<br/>    install_schedule    = optional(string)           # Maintenance Window cron/rate expression for patch installation; omit for scan-only.<br/>    scan_only           = optional(bool, false)      # Create only a scan window and never schedule an Install task.<br/>    target_instance_ids = optional(list(string), []) # EC2 instances to tag with Environment and PatchGroup for this target group.<br/>    schedule_timezone   = string                     # IANA time zone for both schedules.<br/>    duration            = optional(number, 3)        # Window length in hours.<br/>    cutoff              = optional(number, 1)        # Hours before end when new tasks stop.<br/>    max_concurrency     = optional(string, "1")      # Concurrent nodes per task.<br/>    max_errors          = optional(string, "0")      # Failed nodes allowed per task.<br/>    service_role_arn    = string                     # Maintenance Window service role ARN.<br/>  })</pre> | n/a | yes |
 | <a name="input_nonproduction_notification_arn"></a> [nonproduction\_notification\_arn](#input\_nonproduction\_notification\_arn) | Optional existing SNS monitoring topic for nonproduction Maintenance Window status events. Topic owner must grant events.amazonaws.com sns:Publish for the rule ARN. | `string` | `null` | no |
@@ -65,7 +65,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-| ---- | ----------- |
+|------|-------------|
 | <a name="output_maintenance_window_ids"></a> [maintenance\_window\_ids](#output\_maintenance\_window\_ids) | Created scan, optional nonproduction install, and optional production window IDs. |
 | <a name="output_nonproduction_notification_rule_arn"></a> [nonproduction\_notification\_rule\_arn](#output\_nonproduction\_notification\_rule\_arn) | Grant this rule ARN events.amazonaws.com sns:Publish in the existing nonproduction topic policy. |
 | <a name="output_notification_policy_statement"></a> [notification\_policy\_statement](#output\_notification\_policy\_statement) | Merge into the existing SNS topic policy; do not replace its other statements. The topic and any KMS key must permit EventBridge publication. |

@@ -14,14 +14,14 @@ Initialize with `terraform init -backend=false`; then run `terraform validate` a
 ## Requirements
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.9 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.37 |
 
 ## Providers
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 6.37 |
 
 ## Modules
@@ -31,7 +31,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-| ---- | ---- |
+|------|------|
 | [aws_cloudwatch_event_rule.execution_status](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_target.execution_status](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
 | [aws_ssm_document.promote](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_document) | resource |
@@ -41,7 +41,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ---- | ----------- | ---- | ------- | :------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_candidate"></a> [candidate](#input\_candidate) | SSM parameter identifying a candidate EKS-optimized AMI release. | <pre>object({<br/>    parameter_name           = string # Public or private SSM parameter containing JSON with image_id and release_version.<br/>    approved_release_version = string # Release version validated in nonproduction and pinned for this runbook.<br/>  })</pre> | n/a | yes |
 | <a name="input_name"></a> [name](#input\_name) | Name prefix for the AMI promotion runbook. | `string` | n/a | yes |
 | <a name="input_promotion"></a> [promotion](#input\_promotion) | Existing managed node group and approval settings; this module never starts a promotion automatically. | <pre>object({<br/>    cluster_name               = string                 # Existing EKS cluster name.<br/>    node_group_name            = string                 # Existing managed node group name.<br/>    automation_role_arn        = string                 # Role allowed to describe and update this node group.<br/>    notification_arn           = string                 # SNS topic for manual approval requests.<br/>    approvers                  = list(string)           # Named IAM approver ARNs.<br/>    approval_timeout           = optional(number, 3600) # Seconds before an unanswered request aborts.<br/>    max_unavailable            = optional(number)       # Existing absolute node rollout limit, if configured.<br/>    max_unavailable_percentage = optional(number)       # Existing percentage node rollout limit, if configured.<br/>  })</pre> | n/a | yes |
@@ -50,7 +50,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-| ---- | ----------- |
+|------|-------------|
 | <a name="output_candidate_ami_id"></a> [candidate\_ami\_id](#output\_candidate\_ami\_id) | Candidate image ID from the SSM parameter; validation is still required. |
 | <a name="output_candidate_release_version"></a> [candidate\_release\_version](#output\_candidate\_release\_version) | Candidate EKS AMI release version; pin as approved\_release\_version after validation. |
 | <a name="output_current_release_version"></a> [current\_release\_version](#output\_current\_release\_version) | Current node-group AMI release version at plan time; record it before promotion for replacement-group recovery. |

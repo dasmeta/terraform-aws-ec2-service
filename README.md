@@ -286,4 +286,4 @@ even when the AMI/VPC are explicit.
 
 [EC2 SSM patch management](modules/ssm-patch-management) and [EKS AMI promotion](modules/eks-ami-promotion) are verified by the `terraform-validate` CI context (both module matrix legs run fmt, validate and native mock tests); their TFLint matrix legs run separately. Guard behavior tests also run in CI. The [production readiness procedure](docs/patching-readiness.md) defines the live acceptance matrix, IAM review, notification integration and recovery evidence needed before production.
 
-Run `terraform init -backend=false` before validation/tests in each changed module. `bash scripts/validate.sh` includes both modules and `python3 -m unittest discover -s tests/patching -v` runs the guard tests without AWS credentials. Use Terraform 1.9.8 to match CI.
+Run `terraform init -backend=false` before validation/tests in each changed module. `bash scripts/validate.sh` includes both modules and `python3 -m unittest discover -s tests/patching -v` runs the guard tests without AWS credentials. Use Terraform 1.9.8 and terraform-docs 0.20.0 to match CI.
