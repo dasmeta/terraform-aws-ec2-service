@@ -270,7 +270,7 @@ for a separately managed DNS alias.
 ./scripts/validate.sh
 ```
 
-The script initializes and validates the root, both submodules and all examples,
+The script initializes and validates the root, the EC2/ALB and patching submodules, and all examples,
 then runs native Terraform tests with a mocked AWS provider and checks the real
 nested upstream resources in test plans/states. Requires Terraform, Python 3,
 and network access to download public module/provider dependencies. No AWS
@@ -281,3 +281,9 @@ real AMI compatibility, IAM permissions, subnet placement, application health,
 network routes and TLS certificates in your deployment environment. Upstream
 EC2 also reads public AMI SSM metadata and the supplied subnet during real plans,
 even when the AMI/VPC are explicit.
+
+## Patching modules
+
+[EC2 SSM patch management](modules/ssm-patch-management) and [EKS AMI promotion](modules/eks-ami-promotion) are verified by the `terraform-validate` CI context (both module matrix legs run fmt, validate and native mock tests); their TFLint matrix legs run separately. Guard behavior tests also run in CI. The [production readiness procedure](docs/patching-readiness.md) defines the live acceptance matrix, IAM review, notification integration and recovery evidence needed before production.
+
+Run `terraform init -backend=false` before validation/tests in each changed module. `bash scripts/validate.sh` includes both modules and `python3 -m unittest discover -s tests/patching -v` runs the guard tests without AWS credentials. Use Terraform 1.9.8 to match CI.

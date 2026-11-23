@@ -1,4 +1,11 @@
-mock_provider "aws" {}
+mock_provider "aws" {
+  mock_resource "aws_ssm_document" {
+    defaults = { document_version = "1" }
+  }
+  mock_resource "aws_ssm_maintenance_window" {
+    defaults = { id = "mw-0123456789abcdef0" }
+  }
+}
 
 variables {
   name = "example"
@@ -27,10 +34,14 @@ variables {
 }
 
 run "production_requires_approval" {
-  command = plan
+  command = apply
   assert {
     condition     = aws_ssm_maintenance_window_task.production[0].task_type == "AUTOMATION"
     error_message = "Production must schedule Automation."
+  }
+  assert {
+    condition     = aws_ssm_maintenance_window_task.production[0].task_arn == aws_ssm_document.approved_install[0].name
+    error_message = "Maintenance Windows must invoke the document name, not an Automation definition ARN."
   }
   assert {
     condition     = yamldecode(aws_ssm_document.approved_install[0].content).mainSteps[0].action == "aws:approve"
@@ -51,7 +62,7 @@ run "production_requires_approval" {
 }
 
 run "production_disabled_by_default" {
-  command = plan
+  command = apply
   variables {
     production = null
   }
@@ -62,16 +73,16 @@ run "production_disabled_by_default" {
 }
 
 run "scan_only_uses_default_baselines_and_exact_instances" {
-  command = plan
+  command = apply
   variables {
     patch_policy = null
     production   = null
     nonproduction = {
       environment         = "dev"
-      patch_group         = "sela-dev-ec2-test"
+      patch_group         = "example-dev-patch-test"
       scan_schedule       = "cron(0 1 ? * SUN *)"
       scan_only           = true
-      target_instance_ids = ["i-04cb67458bffa5472", "i-024dc0b7d614d44a4"]
+      target_instance_ids = ["i-0123456789abcdef0", "i-0123456789abcdef1"]
       schedule_timezone   = "UTC"
       service_role_arn    = "arn:aws:iam::123456789012:role/ssm-window"
     }
@@ -81,11 +92,40 @@ run "scan_only_uses_default_baselines_and_exact_instances" {
     error_message = "Scan-only testing must use AWS default OS baselines."
   }
   assert {
-    condition     = length(aws_ssm_maintenance_window.this) == 1 && length(aws_ssm_maintenance_window_task.nonproduction) == 1 && alltrue([for p in aws_ssm_maintenance_window_task.nonproduction["scan"].task_invocation_parameters[0].run_command_parameters[0].parameter : p.values[0] == "Scan"])
+    condition     = length(aws_ssm_maintenance_window.this) == 1 && length(aws_ssm_maintenance_window_task.nonproduction) == 1 && alltrue([for p in aws_ssm_maintenance_window_task.nonproduction["scan"].task_invocation_parameters[0].run_command_parameters[0].parameter : p.values[0] == "Scan" if p.name == "Operation"])
     error_message = "Scan-only testing must create one Scan window and no Install task."
   }
   assert {
     condition     = length(aws_ec2_tag.nonproduction_targets) == 4
     error_message = "Both explicit instances must receive Environment and PatchGroup tags."
   }
+}
+
+run "post_install_gates_and_reboot_policy" {
+  command = apply
+  assert {
+    condition = tolist([for step in yamldecode(aws_ssm_document.approved_install[0].content).mainSteps : step.name]) == tolist([
+      "approveInstallation", "verifyWindowOpen", "verifyProductionTarget", "installPatches", "waitForInstanceHealth",
+      "waitForSystemHealth", "recordScanStart", "scanAfterInstallation", "verifyPatchCompliance", "confirmApplicationHealth"
+    ])
+    error_message = "Installation must be followed by instance, system, compliance and application health checks."
+  }
+  assert {
+    condition     = alltrue([for step in yamldecode(aws_ssm_document.approved_install[0].content).mainSteps : step.onFailure == "Abort"])
+    error_message = "Failed installation, verification, rejection or timeout must abort."
+  }
+  assert {
+    condition     = yamldecode(aws_ssm_document.approved_install[0].content).mainSteps[3].inputs.Parameters.RebootOption == ["RebootIfNeeded"]
+    error_message = "Reboot behavior must be explicit."
+  }
+  assert {
+    condition     = tolist(jsondecode(aws_resourcegroups_group.targets["production"].resource_query[0].query).TagFilters) == tolist([{ Key = "Environment", Values = ["production"] }, { Key = "PatchGroup", Values = ["prod-linux"] }])
+    error_message = "Production selection must require exact environment AND patch-group tags."
+  }
+}
+
+run "reject_invalid_reboot_policy" {
+  command = plan
+  variables { reboot_option = "Never" }
+  expect_failures = [var.reboot_option]
 }

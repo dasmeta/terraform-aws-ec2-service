@@ -7,6 +7,9 @@ module "patching" {
   source = "../../modules/ssm-patch-management"
   name   = "example-linux"
 
+  # Install may reboot the instance; validate recovery before enabling the schedule.
+  reboot_option = "RebootIfNeeded"
+
   patch_policy = {
     operating_system   = "AMAZON_LINUX_2023"
     classifications    = ["Security"]
@@ -26,3 +29,7 @@ module "patching" {
 # For a mixed-OS compliance test, set patch_policy = null to use AWS default
 # baselines, set nonproduction.scan_only = true, list target_instance_ids,
 # and omit nonproduction.install_schedule. No Install task is created.
+
+# Merge module.patching.notification_policy_statement into the existing
+# approval topic policy (using the module label above), confirm its subscription,
+# and follow docs/patching-readiness.md before enabling production.

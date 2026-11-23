@@ -28,3 +28,8 @@ module "eks_ami" {
   }
   promotion = var.promotion
 }
+
+# Merge module.eks_ami.notification_policy_statement into the approval topic
+# policy. Start a pinned numeric document version with ApprovalReference only
+# after validating the release, PDBs, spare capacity and replacement recovery.
+# Final health approval requires Ready nodes, healthy pods and application checks.

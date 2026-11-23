@@ -17,6 +17,8 @@ jobs:
       matrix:
         path:
           - ./
+          - modules/ssm-patch-management
+          - modules/eks-ami-promotion
     permissions:
       actions: write
       contents: write
@@ -35,9 +37,20 @@ jobs:
     - name: Initialize Terraform
       working-directory: ${{ matrix.path }}
       run: terraform init -backend=false -input=false -no-color
+    - name: Check formatting
+      working-directory: ${{ matrix.path }}
+      run: terraform fmt -check -recursive
     - name: Validate Terraform
       working-directory: ${{ matrix.path }}
       run: terraform validate -no-color
+
+    - name: Test patching module
+      if: matrix.path != './'
+      working-directory: ${{ matrix.path }}
+      run: terraform test -no-color
+    - name: Test runbook guards
+      if: matrix.path == 'modules/eks-ami-promotion'
+      run: python3 -m unittest discover -s tests/patching -v
 
   # The stable required context. Its name does not depend on the path list, so
   # branch protection can require `terraform-validate` once and keep requiring

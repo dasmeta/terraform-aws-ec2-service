@@ -41,7 +41,7 @@ run "candidate_is_not_auto_promoted" {
     error_message = "Promotion must begin with manual approval."
   }
   assert {
-    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[2].inputs.Api == "UpdateNodegroupVersion"
+    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[3].inputs.Api == "UpdateNodegroupVersion"
     error_message = "Promotion must update the managed node group after approval."
   }
 }
@@ -70,11 +70,11 @@ run "accept_percentage_rollout_limit" {
     }
   }
   assert {
-    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[1].inputs.PropertySelector == "$.nodegroup.updateConfig.maxUnavailablePercentage"
+    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[2].inputs.PropertySelector == "$.nodegroup.updateConfig.maxUnavailablePercentage"
     error_message = "The guard must check the existing percentage rollout limit."
   }
   assert {
-    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[1].inputs.DesiredValues == ["33"]
+    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[2].inputs.DesiredValues == ["33"]
     error_message = "The guard must check the exact percentage configured on the node group."
   }
 }
@@ -89,6 +89,44 @@ run "reject_zero_percentage_rollout_limit" {
       notification_arn           = "arn:aws:sns:us-east-1:123456789012:AutomationApproval"
       approvers                  = ["arn:aws:iam::123456789012:role/EksApprover"]
       max_unavailable_percentage = 0
+    }
+  }
+  expect_failures = [var.promotion]
+}
+
+run "runtime_guards_and_health_signoff" {
+  command = plan
+  assert {
+    condition = tolist([for step in jsondecode(aws_ssm_document.promote.content).mainSteps : step.name]) == tolist([
+      "approvePromotion", "verifyApprovedCandidate", "verifyRolloutLimit", "updateNodeGroup",
+      "waitForHealthyUpdate", "verifyUpdateSucceeded", "verifyNodeGroupActive", "verifyInstalledRelease", "confirmWorkloadHealth"
+    ])
+    error_message = "Runtime candidate verification and health gates must surround the update."
+  }
+  assert {
+    condition     = alltrue([for step in jsondecode(aws_ssm_document.promote.content).mainSteps : step.onFailure == "Abort"])
+    error_message = "Every failed, rejected or timed-out step must abort."
+  }
+  assert {
+    condition     = jsondecode(aws_ssm_document.promote.content).mainSteps[3].inputs.force == false
+    error_message = "Updates must respect Pod Disruption Budgets."
+  }
+  assert {
+    condition     = jsondecode(aws_cloudwatch_event_rule.execution_status.event_pattern).detail.Definition == [aws_ssm_document.promote.name]
+    error_message = "Execution notifications must be scoped to this document."
+  }
+}
+
+run "reject_excessive_approval_timeout" {
+  command = plan
+  variables {
+    promotion = {
+      cluster_name        = "example"
+      node_group_name     = "workers"
+      automation_role_arn = "arn:aws:iam::123456789012:role/eks-promotion"
+      notification_arn    = "arn:aws:sns:us-east-1:123456789012:AutomationApproval"
+      approvers           = ["arn:aws:iam::123456789012:role/EksApprover"]
+      approval_timeout    = 2592001
     }
   }
   expect_failures = [var.promotion]

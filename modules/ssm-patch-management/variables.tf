@@ -42,7 +42,7 @@ variable "nonproduction" {
   description = "Nonproduction target and schedule."
   nullable    = false
   validation {
-    condition     = var.nonproduction.duration > var.nonproduction.cutoff && var.nonproduction.duration <= 24 && var.nonproduction.cutoff >= 0
+    condition     = length(trimspace(var.nonproduction.environment)) > 0 && length(trimspace(var.nonproduction.patch_group)) > 0 && var.nonproduction.duration > var.nonproduction.cutoff && var.nonproduction.duration <= 24 && var.nonproduction.cutoff >= 0
     error_message = "duration must exceed nonnegative cutoff."
   }
   validation {
@@ -75,11 +75,12 @@ variable "production" {
   default     = null
   validation {
     condition = var.production == null ? true : (
-      length(var.production.approvers) > 0 &&
+      length(var.production.approvers) > 0 && length(var.production.approvers) <= 10 &&
+      length(trimspace(var.production.environment)) > 0 && length(trimspace(var.production.patch_group)) > 0 &&
       var.production.duration > var.production.cutoff &&
       var.production.duration <= 24 &&
       var.production.cutoff >= 0 &&
-      var.production.approval_timeout > 0 && var.production.approval_timeout <= 2592000 &&
+      var.production.approval_timeout > 0 && var.production.approval_timeout <= 2592000 && floor(var.production.approval_timeout) == var.production.approval_timeout &&
       var.production.environment != var.nonproduction.environment &&
       var.production.patch_group != var.nonproduction.patch_group
     )
@@ -91,4 +92,20 @@ variable "tags" {
   type        = map(string)
   description = "Tags for created resources."
   default     = {}
+}
+
+variable "reboot_option" {
+  type        = string
+  default     = "RebootIfNeeded"
+  description = "AWS-RunPatchBaseline reboot behavior. NoReboot can leave pending patches and fails the production compliance gate until resolved."
+  validation {
+    condition     = contains(["RebootIfNeeded", "NoReboot"], var.reboot_option)
+    error_message = "reboot_option must be RebootIfNeeded or NoReboot."
+  }
+}
+
+variable "nonproduction_notification_arn" {
+  type        = string
+  default     = null
+  description = "Optional existing SNS monitoring topic for nonproduction Maintenance Window status events. Topic owner must grant events.amazonaws.com sns:Publish for the rule ARN."
 }

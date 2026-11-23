@@ -128,6 +128,10 @@ resource "aws_ssm_maintenance_window_task" "nonproduction" {
         name   = "Operation"
         values = [each.value]
       }
+      parameter {
+        name   = "RebootOption"
+        values = [var.reboot_option]
+      }
     }
   }
 }
@@ -137,14 +141,14 @@ resource "aws_ssm_document" "approved_install" {
   name            = "${var.name}-approved-install"
   document_type   = "Automation"
   document_format = "YAML"
+  target_type     = "/AWS::EC2::Instance"
   content = yamlencode({
     schemaVersion = "0.3"
     description   = "Approve a production EC2 patch before installation"
-    targetType    = "/AWS::EC2::Instance"
     assumeRole    = var.production.automation_role_arn
     parameters = {
       InstanceId        = { type = "String", description = "Production EC2 instance ID" }
-      WindowId          = { type = "String", description = "Current maintenance window ID" }
+      WindowId          = { type = "String", description = "Current maintenance window ID", allowedValues = [aws_ssm_maintenance_window.this["production"].id] }
       WindowExecutionId = { type = "String", description = "Current maintenance window execution ID" }
     }
     mainSteps = [
@@ -172,19 +176,7 @@ resource "aws_ssm_document" "approved_install" {
             window_id           = "{{ WindowId }}"
             window_execution_id = "{{ WindowExecutionId }}"
           }
-          Script = <<-PY
-            def check_window(events, context):
-                import boto3
-                from datetime import datetime, timedelta, timezone
-
-                ssm = boto3.client("ssm")
-                execution = ssm.get_maintenance_window_execution(WindowExecutionId=events["window_execution_id"])
-                window = ssm.get_maintenance_window(WindowId=events["window_id"])
-                latest_start = execution["StartTime"] + timedelta(hours=window["Duration"] - window["Cutoff"])
-                if execution["Status"] != "IN_PROGRESS" or datetime.now(timezone.utc) >= latest_start - timedelta(minutes=5):
-                    raise RuntimeError("Production patch window is closed or near cutoff")
-                return {"allowed": True}
-          PY
+          Script = file("${path.module}/scripts/verify_window.py")
         }
       },
       {
@@ -210,7 +202,82 @@ resource "aws_ssm_document" "approved_install" {
         inputs = {
           DocumentName = "AWS-RunPatchBaseline"
           InstanceIds  = ["{{ InstanceId }}"]
-          Parameters   = { Operation = ["Install"] }
+          Parameters   = { Operation = ["Install"], RebootOption = [var.reboot_option] }
+        }
+      },
+      {
+        name           = "waitForInstanceHealth"
+        action         = "aws:waitForAwsResourceProperty"
+        timeoutSeconds = 900
+        onFailure      = "Abort"
+        inputs = {
+          Service          = "ec2"
+          Api              = "DescribeInstanceStatus"
+          InstanceIds      = ["{{ InstanceId }}"]
+          PropertySelector = "$.InstanceStatuses[0].InstanceStatus.Status"
+          DesiredValues    = ["ok"]
+        }
+      },
+      {
+        name           = "waitForSystemHealth"
+        action         = "aws:waitForAwsResourceProperty"
+        timeoutSeconds = 900
+        onFailure      = "Abort"
+        inputs = {
+          Service          = "ec2"
+          Api              = "DescribeInstanceStatus"
+          InstanceIds      = ["{{ InstanceId }}"]
+          PropertySelector = "$.InstanceStatuses[0].SystemStatus.Status"
+          DesiredValues    = ["ok"]
+        }
+      },
+      {
+        name           = "recordScanStart"
+        action         = "aws:executeScript"
+        timeoutSeconds = 30
+        onFailure      = "Abort"
+        inputs = {
+          Runtime = "python3.11"
+          Handler = "record_start"
+          Script  = "def record_start(events, context):\n    from datetime import datetime, timezone\n    return {\"started_at\": datetime.now(timezone.utc).isoformat()}\n"
+        }
+        outputs = [{ Name = "ScanStartedAt", Selector = "$.Payload.started_at", Type = "String" }]
+      },
+      {
+        name      = "scanAfterInstallation"
+        action    = "aws:runCommand"
+        onFailure = "Abort"
+        inputs = {
+          DocumentName = "AWS-RunPatchBaseline"
+          InstanceIds  = ["{{ InstanceId }}"]
+          Parameters   = { Operation = ["Scan"], RebootOption = ["NoReboot"] }
+        }
+      },
+      {
+        name           = "verifyPatchCompliance"
+        action         = "aws:executeScript"
+        timeoutSeconds = 600
+        onFailure      = "Abort"
+        inputs = {
+          Runtime = "python3.11"
+          Handler = "verify_compliance"
+          Script  = file("${path.module}/scripts/verify_compliance.py")
+          InputPayload = {
+            instance_id     = "{{ InstanceId }}"
+            scan_started_at = "{{ recordScanStart.ScanStartedAt }}"
+          }
+        }
+      },
+      {
+        name           = "confirmApplicationHealth"
+        action         = "aws:approve"
+        timeoutSeconds = var.production.approval_timeout
+        onFailure      = "Abort"
+        inputs = {
+          NotificationArn      = var.production.notification_arn
+          Message              = "Confirm application smoke tests and service health for {{ InstanceId }} after patch installation. Record results against this execution. Reject on failure and follow the tested backup recovery procedure."
+          MinRequiredApprovals = 1
+          Approvers            = var.production.approvers
         }
       }
     ]
@@ -222,7 +289,7 @@ resource "aws_ssm_maintenance_window_task" "production" {
   count            = var.production == null ? 0 : 1
   window_id        = aws_ssm_maintenance_window.this["production"].id
   task_type        = "AUTOMATION"
-  task_arn         = aws_ssm_document.approved_install[0].arn
+  task_arn         = aws_ssm_document.approved_install[0].name
   service_role_arn = var.production.service_role_arn
   max_concurrency  = var.production.max_concurrency
   max_errors       = var.production.max_errors
@@ -234,7 +301,7 @@ resource "aws_ssm_maintenance_window_task" "production" {
   }
   task_invocation_parameters {
     automation_parameters {
-      document_version = "$DEFAULT"
+      document_version = aws_ssm_document.approved_install[0].document_version
       parameter {
         name   = "InstanceId"
         values = ["{{RESOURCE_ID}}"]
